@@ -4,30 +4,55 @@ import mysql.connector
 app = Flask(__name__)
 
 # DB connection
-db = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="123Lakshnya@123",
-    database="smart_farming"
-)
-# Keep reads out of a long-running repeatable-read snapshot.
-# Without this, a query made before data load can keep returning stale 0-row results.
-db.autocommit = True
+db = None
+cursor = None
 
-cursor = db.cursor()
+try:
+    db = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="123Lakshnya@123",
+        database="smart_farming"
+    )
+    db.autocommit = True
+    cursor = db.cursor()
+    print("Database connected successfully!")
+except Exception as e:
+    print(f"Database connection failed: {e}")
+
+
+def execute_query(query):
+    try:
+        if cursor is None:
+            return None, "Database not connected"
+        cursor.execute(query)
+        return cursor.fetchall(), None
+    except Exception as e:
+        return None, str(e)
+
+
+def render_dashboard():
+    status_message = None if db and cursor else "Database connection failed. Check MySQL server."
+    return render_template(
+        "index.html",
+        db_connected=bool(db and cursor),
+        status_message=status_message,
+    )
+
 
 # ------------------ HOME ------------------
 @app.route('/')
 def home():
-    return "Smart Farming System Running ✅"
+    return render_dashboard()
+
 
 # ------------------ GUI ------------------
 @app.route('/dashboard')
 def dashboard():
-    return render_template("index.html")
+    return render_dashboard()
+
 
 # ------------------ SELECT QUERIES ------------------
-
 @app.route('/top-region')
 def top_region():
     cursor.execute("""
@@ -43,7 +68,7 @@ def top_region():
 
 @app.route('/top-crops')
 def top_crops():
-    cursor.execute("""
+    result, error = execute_query("""
     SELECT c.crop_name, AVG(f.yield)
     FROM Farm_Data f
     JOIN Crop c ON f.crop_id = c.crop_id
@@ -51,7 +76,9 @@ def top_crops():
     ORDER BY AVG(f.yield) DESC
     LIMIT 5;
     """)
-    return jsonify(cursor.fetchall())
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify(result)
 
 
 @app.route('/avg-yield-region')
@@ -122,27 +149,31 @@ def fast_harvest():
 
 @app.route('/records-per-region')
 def records_per_region():
-    cursor.execute("""
+    result, error = execute_query("""
     SELECT r.region_name, COUNT(*)
     FROM Farm_Data f
     JOIN Region r ON f.region_id = r.region_id
     GROUP BY r.region_name;
     """)
-    return jsonify(cursor.fetchall())
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify(result)
 
 
 @app.route('/highest-yield')
 def highest_yield():
-    cursor.execute("""
+    result, error = execute_query("""
     SELECT *
     FROM Farm_Data
     ORDER BY yield DESC
     LIMIT 1;
     """)
-    return jsonify(cursor.fetchall())
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify(result)
+
 
 # ------------------ DML ------------------
-
 @app.route('/insert', methods=['POST'])
 def insert_data():
     data = request.json
@@ -180,8 +211,8 @@ def delete_data():
     db.commit()
     return "Deleted Successfully"
 
-# ------------------ TCL ------------------
 
+# ------------------ TCL ------------------
 @app.route('/transaction')
 def transaction():
     try:
@@ -193,8 +224,9 @@ def transaction():
         """)
         cursor.execute("ROLLBACK;")
         return "Transaction rolled back successfully"
-    except:
+    except Exception:
         return "Transaction failed"
+
 
 # ------------------ DCL (run once manually) ------------------
 # NOTE: DCL usually not in API for safety

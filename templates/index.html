@@ -1,106 +1,213 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Farming Insights</title>
+    <title>Farmlytics</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;700&family=Mulish:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <main class="page">
-        <header class="hero">
-            <p class="hero-kicker">DBMS Project</p>
-            <h1>Smart Farming Insights</h1>
-            <p class="hero-subtitle">Choose an analysis card to run a stored query and view the result.</p>
-        </header>
+    <div class="page-shell">
+        <div class="orb orb-one"></div>
+        <div class="orb orb-two"></div>
 
-        <section>
-            <h2 class="section-title">Available Analyses</h2>
-            <div id="queryGrid" class="query-grid"></div>
-        </section>
+        <main class="page">
+            <header class="hero glass reveal">
+                <nav class="topbar">
+                    <div class="brand">
+                        <div class="brand-mark" aria-hidden="true">
+                            <span class="leaf leaf-left"></span>
+                            <span class="leaf leaf-right"></span>
+                            <span class="brand-seed"></span>
+                        </div>
+                        <div>
+                            <p class="brand-label">Farmlytics</p>
+                            <p class="brand-tag">Smart insights for better farming decisions</p>
+                        </div>
+                    </div>
+                    <div class="status-pill {{ 'online' if db_connected else 'offline' }}">
+                        <span class="status-dot"></span>
+                        {{ "Database live" if db_connected else "Database offline" }}
+                    </div>
+                </nav>
 
-        <section class="result-panel">
-            <div class="result-head">
-                <h2 id="resultTitle">Result Panel</h2>
-                <p id="resultMeta">Select any analysis card above.</p>
-            </div>
-            <div id="resultArea" class="result-area">
-                <p class="placeholder">No analysis has been executed yet.</p>
-            </div>
-        </section>
-    </main>
+                <section class="hero-content">
+                    <div class="hero-copy">
+                        <p class="eyebrow">Farmer-first search dashboard</p>
+                        <h1>Ask simple crop questions and get clean farm intelligence instantly.</h1>
+                        <p class="hero-subtitle">
+                            Type everyday queries like <strong>"top crops"</strong>, <strong>"best region"</strong>, or
+                            <strong>"rainy crops"</strong> and Farmlytics maps them to SQL-backed results behind the scenes.
+                        </p>
+
+                        <form id="searchForm" class="search-card" autocomplete="off">
+                            <label class="search-label" for="queryInput">Search your farm data</label>
+                            <div class="search-row">
+                                <input
+                                    id="queryInput"
+                                    name="query"
+                                    type="text"
+                                    placeholder="Try: top crops, region, rainy crops, best soil"
+                                >
+                                <button class="search-btn" type="submit">Search</button>
+                            </div>
+                            <p id="searchHint" class="search-hint">Keyword matching powers the demo search experience.</p>
+                        </form>
+
+                        <div class="quick-actions">
+                            <button class="quick-chip" type="button" data-query="top region">Top Region</button>
+                            <button class="quick-chip" type="button" data-query="best soil">Best Soil</button>
+                            <button class="quick-chip" type="button" data-query="rainy crops">Rainy Crops</button>
+                        </div>
+                    </div>
+
+                    <aside class="hero-side glass-soft">
+                        <p class="mini-heading">Season Snapshot</p>
+                        <div class="insight-stack">
+                            <article class="insight-card">
+                                <span class="insight-value">5</span>
+                                <span class="insight-label">Top-yield crops surfaced in one search</span>
+                            </article>
+                            <article class="insight-card">
+                                <span class="insight-value">SQL</span>
+                                <span class="insight-label">Backed by live database queries for demos</span>
+                            </article>
+                            <article class="insight-card">
+                                <span class="insight-value">24/7</span>
+                                <span class="insight-label">Decision support feel for modern agriculture teams</span>
+                            </article>
+                        </div>
+                    </aside>
+                </section>
+            </header>
+
+            {% if status_message %}
+            <section class="notice glass reveal">
+                <p>{{ status_message }}</p>
+            </section>
+            {% endif %}
+
+            <section class="summary-grid reveal">
+                <article class="summary-card glass">
+                    <p class="summary-kicker">Crop pulse</p>
+                    <h2>High-performing crops help farmers plan faster</h2>
+                    <p>Use quick discovery to compare productive crops and spot what tends to perform well across your dataset.</p>
+                </article>
+                <article class="summary-card glass">
+                    <p class="summary-kicker">Rain view</p>
+                    <h2>Weather-aware suggestions improve field decisions</h2>
+                    <p>Rain-linked crop lists can support seasonal planning, especially when choosing varieties for wetter conditions.</p>
+                </article>
+                <article class="summary-card glass">
+                    <p class="summary-kicker">Soil match</p>
+                    <h2>Better soil alignment can raise yield confidence</h2>
+                    <p>Surface the best soil type quickly and turn raw tables into an easier recommendation-style experience.</p>
+                </article>
+            </section>
+
+            <section class="analysis-section reveal">
+                <div class="section-heading">
+                    <div>
+                        <p class="section-kicker">Quick analyses</p>
+                        <h2>Explore with one tap</h2>
+                    </div>
+                    <p class="section-copy">Each action runs a predefined SQL query and formats the answer for a farmer-friendly demo.</p>
+                </div>
+                <div id="queryGrid" class="query-grid"></div>
+            </section>
+
+            <section class="result-panel glass reveal">
+                <div class="result-head">
+                    <div>
+                        <p class="section-kicker">Search output</p>
+                        <h2 id="resultTitle">Ready for your first query</h2>
+                    </div>
+                    <p id="resultMeta">Search above or use a quick action to load farm data.</p>
+                </div>
+
+                <div id="resultStory" class="result-story">
+                    <p>Farmlytics turns stored SQL results into a softer, search-like interface so non-technical users can explore farming patterns without seeing raw database commands.</p>
+                </div>
+
+                <div id="resultArea" class="result-area">
+                    <div class="empty-state">
+                        <div class="empty-illustration" aria-hidden="true">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                        <h3>Start with a natural query</h3>
+                        <p>Examples: "top crops", "best region", "rainy crops", or "best soil".</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
 
     <script>
         const queryDefinitions = [
             {
                 title: "Top Region",
-                subtitle: "Region with highest average yield",
+                subtitle: "Region with the highest average yield in the dataset.",
                 endpoint: "/top-region",
-                columns: ["Region", "Average Yield"]
+                columns: ["Region", "Average Yield"],
+                prompt: ["top region", "best region", "region"],
+                summary: "This result highlights which region is performing strongest on average, making it useful for comparing area-level yield trends."
             },
             {
                 title: "Top 5 Crops",
-                subtitle: "Crops ranked by average yield",
+                subtitle: "Best-performing crops ranked by average yield.",
                 endpoint: "/top-crops",
-                columns: ["Crop", "Average Yield"]
+                columns: ["Crop", "Average Yield"],
+                prompt: ["top crops", "top five crops", "best crops", "crops"],
+                summary: "These are the crops that appear strongest by average yield, giving farmers a simple shortlist for discussion and planning."
+            },
+            {
+                title: "Rainy Crops",
+                subtitle: "Crops observed under rainy weather conditions.",
+                endpoint: "/rainy-crops",
+                columns: ["Crop"],
+                prompt: ["rainy crops", "rain crops", "rain", "rainy"],
+                summary: "This list gives a quick look at crops associated with rainy conditions in the database, which can support weather-aware decisions."
+            },
+            {
+                title: "Best Soil",
+                subtitle: "Soil type with the highest average yield.",
+                endpoint: "/best-soil",
+                columns: ["Soil Type", "Average Yield"],
+                prompt: ["best soil", "soil", "soil type"],
+                summary: "A strong soil match often shapes crop success, so this query surfaces the soil category tied to the best average performance."
             },
             {
                 title: "Yield by Region",
-                subtitle: "Average yield across all regions",
+                subtitle: "Average yield across all regions.",
                 endpoint: "/avg-yield-region",
-                columns: ["Region", "Average Yield"]
-            },
-            {
-                title: "Rainy Weather Crops",
-                subtitle: "Crops observed under rainy condition",
-                endpoint: "/rainy-crops",
-                columns: ["Crop"]
-            },
-            {
-                title: "Fertilizer Usage",
-                subtitle: "Total records where fertilizer was used",
-                endpoint: "/fertilizer-count",
-                columns: ["Count"]
-            },
-            {
-                title: "Irrigation Usage",
-                subtitle: "Total records where irrigation was used",
-                endpoint: "/irrigation-count",
-                columns: ["Count"]
-            },
-            {
-                title: "Best Soil Type",
-                subtitle: "Soil type with highest average yield",
-                endpoint: "/best-soil",
-                columns: ["Soil", "Average Yield"]
+                columns: ["Region", "Average Yield"],
+                prompt: ["yield region", "yield by region", "all regions"],
+                summary: "Use this regional breakdown to compare performance patterns rather than focusing on only the single best area."
             },
             {
                 title: "Fast Harvest Crops",
-                subtitle: "Crops with harvest under 100 days",
+                subtitle: "Crops harvested in under 100 days.",
                 endpoint: "/fast-harvest-crops",
-                columns: ["Crop"]
-            },
-            {
-                title: "Records per Region",
-                subtitle: "How many records each region has",
-                endpoint: "/records-per-region",
-                columns: ["Region", "Count"]
-            },
-            {
-                title: "Highest Yield Record",
-                subtitle: "Single best-performing farm record",
-                endpoint: "/highest-yield",
-                columns: ["ID", "Region ID", "Crop ID", "Soil ID", "Rainfall", "Temperature", "Fertilizer", "Irrigation", "Weather", "Harvest Days", "Yield"]
+                columns: ["Crop"],
+                prompt: ["fast harvest", "quick harvest", "short harvest"],
+                summary: "Shorter harvest windows can help with planning rotations and seasonal timing, especially for faster production cycles."
             }
         ];
 
+        const fallbackQuery = queryDefinitions[0];
         const queryGrid = document.getElementById("queryGrid");
         const resultArea = document.getElementById("resultArea");
         const resultTitle = document.getElementById("resultTitle");
         const resultMeta = document.getElementById("resultMeta");
+        const resultStory = document.getElementById("resultStory");
+        const searchForm = document.getElementById("searchForm");
+        const queryInput = document.getElementById("queryInput");
+        const searchHint = document.getElementById("searchHint");
 
         function escapeHtml(value) {
             return String(value)
@@ -112,15 +219,45 @@
         }
 
         function normalizeRows(data) {
-            if (!Array.isArray(data)) {
-                return [];
-            }
-            return data;
+            return Array.isArray(data) ? data : [];
         }
 
-        function renderTable(rows, columns) {
+        function formatCell(value) {
+            if (typeof value === "number") {
+                return Number.isInteger(value) ? value : value.toFixed(2);
+            }
+            return value ?? "-";
+        }
+
+        function buildHighlights(rows, query) {
             if (!rows.length) {
-                resultArea.innerHTML = '<p class="placeholder">No data matched this analysis.</p>';
+                return "";
+            }
+
+            const firstRow = Array.isArray(rows[0]) ? rows[0] : Object.values(rows[0] || {});
+            const lead = firstRow[0] ?? "Result";
+            const metric = firstRow[1];
+
+            const chips = [
+                `<span class="metric-chip">Query: ${escapeHtml(query.title)}</span>`,
+                `<span class="metric-chip">Rows: ${rows.length}</span>`
+            ];
+
+            if (metric !== undefined) {
+                chips.push(`<span class="metric-chip">Lead value: ${escapeHtml(formatCell(metric))}</span>`);
+            }
+
+            return `
+                <div class="result-insights">
+                    <p class="result-lead">Top highlight: <strong>${escapeHtml(lead)}</strong>${metric !== undefined ? ` stands out with <strong>${escapeHtml(formatCell(metric))}</strong>.` : "."}</p>
+                    <div class="metric-row">${chips.join("")}</div>
+                </div>
+            `;
+        }
+
+        function renderTable(rows, columns, query) {
+            if (!rows.length) {
+                resultArea.innerHTML = '<p class="placeholder">No matching data was found for this search.</p>';
                 return;
             }
 
@@ -137,16 +274,17 @@
                 const width = Array.isArray(firstRow) ? firstRow.length : 1;
                 headers = columns.length === width
                     ? columns
-                    : Array.from({ length: width }, (_, i) => `Column ${i + 1}`);
+                    : Array.from({ length: width }, (_, index) => `Column ${index + 1}`);
                 matrix = rows.map(row => (Array.isArray(row) ? row : [row]));
             }
 
             const headerHtml = headers.map(head => `<th>${escapeHtml(head)}</th>`).join("");
             const bodyHtml = matrix
-                .map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell ?? "-")}</td>`).join("")}</tr>`)
+                .map(row => `<tr>${row.map(cell => `<td>${escapeHtml(formatCell(cell))}</td>`).join("")}</tr>`)
                 .join("");
 
             resultArea.innerHTML = `
+                ${buildHighlights(rows, query)}
                 <div class="table-wrap">
                     <table>
                         <thead>
@@ -158,13 +296,34 @@
             `;
         }
 
-        async function runQuery(query, cardElement) {
+        function findQueryFromText(text) {
+            const normalized = text.trim().toLowerCase();
+            if (!normalized) {
+                return fallbackQuery;
+            }
+
+            return queryDefinitions.find(query =>
+                query.prompt.some(keyword => normalized.includes(keyword))
+            ) || fallbackQuery;
+        }
+
+        async function runQuery(query, cardElement = null, typedText = "") {
             document.querySelectorAll(".query-card").forEach(card => card.classList.remove("active"));
-            cardElement.classList.add("active");
+            if (cardElement) {
+                cardElement.classList.add("active");
+            } else {
+                const matchingCard = document.querySelector(`[data-endpoint="${query.endpoint}"]`);
+                if (matchingCard) {
+                    matchingCard.classList.add("active");
+                }
+            }
 
             resultTitle.textContent = query.title;
-            resultMeta.textContent = "Running analysis...";
-            resultArea.innerHTML = '<p class="placeholder">Loading data...</p>';
+            resultMeta.textContent = typedText
+                ? `Mapped "${typedText}" to ${query.endpoint}`
+                : "Running SQL-backed analysis...";
+            resultStory.innerHTML = `<p>${escapeHtml(query.summary)}</p>`;
+            resultArea.innerHTML = '<p class="placeholder">Loading fresh farm insights...</p>';
 
             try {
                 const response = await fetch(query.endpoint);
@@ -173,24 +332,56 @@
                 }
 
                 const rows = normalizeRows(await response.json());
-                resultMeta.textContent = `Retrieved ${rows.length} row(s).`;
-                renderTable(rows, query.columns || []);
+                resultMeta.textContent = `Retrieved ${rows.length} row(s) from ${query.endpoint}.`;
+                renderTable(rows, query.columns || [], query);
             } catch (error) {
-                resultMeta.textContent = "Could not run this analysis.";
+                resultMeta.textContent = "This analysis could not be loaded.";
                 resultArea.innerHTML = `<p class="error">${escapeHtml(error.message)}</p>`;
             }
         }
 
-        queryDefinitions.forEach(query => {
+        function createQueryCard(query) {
             const card = document.createElement("article");
-            card.className = "query-card";
+            card.className = "query-card glass";
+            card.dataset.endpoint = query.endpoint;
             card.innerHTML = `
-                <h3>${escapeHtml(query.title)}</h3>
-                <p>${escapeHtml(query.subtitle)}</p>
+                <div>
+                    <p class="card-kicker">SQL shortcut</p>
+                    <h3>${escapeHtml(query.title)}</h3>
+                    <p>${escapeHtml(query.subtitle)}</p>
+                </div>
                 <button class="run-btn" type="button">Run Analysis</button>
             `;
-            card.querySelector("button").addEventListener("click", () => runQuery(query, card));
-            queryGrid.appendChild(card);
+
+            card.querySelector("button").addEventListener("click", () => {
+                queryInput.value = query.prompt[0];
+                searchHint.textContent = `Mapped keyword search to ${query.endpoint}`;
+                runQuery(query, card, query.prompt[0]);
+            });
+
+            return card;
+        }
+
+        queryDefinitions.forEach(query => queryGrid.appendChild(createQueryCard(query)));
+
+        searchForm.addEventListener("submit", event => {
+            event.preventDefault();
+            const typedText = queryInput.value.trim();
+            const query = findQueryFromText(typedText);
+            searchHint.textContent = typedText
+                ? `Matched "${typedText}" to ${query.title}`
+                : "Empty search detected, showing a default top-region analysis.";
+            runQuery(query, null, typedText || "default search");
+        });
+
+        document.querySelectorAll(".quick-chip").forEach(button => {
+            button.addEventListener("click", () => {
+                const typedText = button.dataset.query || "";
+                queryInput.value = typedText;
+                const query = findQueryFromText(typedText);
+                searchHint.textContent = `Quick action selected: ${query.title}`;
+                runQuery(query, null, typedText);
+            });
         });
     </script>
 </body>
