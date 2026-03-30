@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 import mysql.connector
 
 app = Flask(__name__)
@@ -7,9 +7,12 @@ app = Flask(__name__)
 db = mysql.connector.connect(
     host="localhost",
     user="root",
-    password=" ",
+    password="123Lakshnya@123",
     database="smart_farming"
 )
+# Keep reads out of a long-running repeatable-read snapshot.
+# Without this, a query made before data load can keep returning stale 0-row results.
+db.autocommit = True
 
 cursor = db.cursor()
 
@@ -17,6 +20,11 @@ cursor = db.cursor()
 @app.route('/')
 def home():
     return "Smart Farming System Running ✅"
+
+# ------------------ GUI ------------------
+@app.route('/dashboard')
+def dashboard():
+    return render_template("index.html")
 
 # ------------------ SELECT QUERIES ------------------
 
