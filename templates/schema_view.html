@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }} | Farmlytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+</head>
+<body>
+    <main class="page" style="max-width: 1160px;">
+        <section class="hero glass reveal" style="padding-bottom: 18px;">
+            <nav class="topbar">
+                <div>
+                    <p class="eyebrow">Database Design View</p>
+                    <h1 style="max-width:none;">{{ page_title }}</h1>
+                    <p class="hero-subtitle">Live metadata extracted from MySQL <code>smart_farming</code> schema.</p>
+                </div>
+                <a class="schema-link-btn" href="/dashboard">Back To Dashboard</a>
+            </nav>
+        </section>
+
+        <section class="result-panel glass reveal">
+            <div class="result-head">
+                <div>
+                    <p class="section-kicker">Output</p>
+                    <h2 id="titleText">Loading...</h2>
+                </div>
+                <p id="metaText">Please wait while schema metadata is loaded.</p>
+            </div>
+            <div id="contentArea" class="result-area"></div>
+        </section>
+    </main>
+
+    <script>
+        const viewMode = "{{ view_mode }}";
+        const apiEndpoint = "{{ api_endpoint }}";
+        const contentArea = document.getElementById("contentArea");
+        const titleText = document.getElementById("titleText");
+        const metaText = document.getElementById("metaText");
+
+        if (window.mermaid) {
+            mermaid.initialize({ startOnLoad: false, theme: "default" });
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#39;");
+        }
+
+        async function renderMermaidInto(element, definition) {
+            if (!element) {
+                return;
+            }
+            if (!window.mermaid || !definition) {
+                element.innerHTML = `<pre class="schema-block">${escapeHtml(definition || "No schema diagram definition.")}</pre>`;
+                return;
+            }
+            try {
+                const id = `schema-mermaid-page-${Date.now()}`;
+                const output = await mermaid.render(id, definition);
+                element.innerHTML = output.svg;
+            } catch (error) {
+                element.innerHTML = `<pre class="schema-block">${escapeHtml(definition)}</pre>`;
+            }
+        }
+
+        function renderChenDiagram(targetElement, payload) {
+            if (!targetElement) {
+                return;
+            }
+
+            const entities = payload.entities || [];
+            const relationships = payload.relationships || [];
+            if (!entities.length) {
+                targetElement.innerHTML = '<p class="placeholder">No entities found for ER diagram.</p>';
+                return;
+            }
+
+            const tableMap = {};
+            entities.forEach(entity => {
+                tableMap[(entity.name || "").toLowerCase()] = entity;
+            });
+
+            const hasSmartFarmingShape = tableMap.crop && tableMap.region && tableMap.soil && tableMap.farm_data;
+            if (!hasSmartFarmingShape) {
+                targetElement.innerHTML = '<p class="placeholder">ER visualization template currently supports the smart_farming schema layout.</p>';
+                return;
+            }
+
+            const width = 1200;
+            const height = 900;
+            const parts = [];
+            const crop = tableMap.crop;
+            const region = tableMap.region;
+            const soil = tableMap.soil;
+            const farm = tableMap.farm_data;
+            const fkSet = new Set(relationships.map(rel => (rel.from_table === "farm_data" ? rel.from_column : "")));
+
+            const boxes = {
+                crop: { cx: 220, cy: 185, w: 250, h: 72 },
+                region: { cx: 600, cy: 185, w: 250, h: 72 },
+                soil: { cx: 980, cy: 185, w: 250, h: 72 },
+                farm_data: { cx: 600, cy: 620, w: 340, h: 78 }
+            };
+
+            const relationConfigs = [
+                { key: "crop_id", label: "HAS_CROP", cx: 360, cy: 395, parent: "crop", nOffsetX: -18 },
+                { key: "region_id", label: "HAS_REGION", cx: 600, cy: 350, parent: "region", nOffsetX: 0 },
+                { key: "soil_id", label: "HAS_SOIL", cx: 840, cy: 395, parent: "soil", nOffsetX: 18 }
+            ];
+
+            function entityBottom(box) {
+                return { x: box.cx, y: box.cy + box.h / 2 };
+            }
+            function interpolate(a, b, t) {
+                return {
+                    x: a.x + (b.x - a.x) * t,
+                    y: a.y + (b.y - a.y) * t
+                };
+            }
+            function drawDoubleLine(x1, y1, x2, y2) {
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const len = Math.hypot(dx, dy) || 1;
+                const px = (-dy / len) * 3;
+                const py = (dx / len) * 3;
+                parts.push(`<line class="chen-edge chen-total" x1="${x1 + px}" y1="${y1 + py}" x2="${x2 + px}" y2="${y2 + py}" />`);
+                parts.push(`<line class="chen-edge chen-total" x1="${x1 - px}" y1="${y1 - py}" x2="${x2 - px}" y2="${y2 - py}" />`);
+            }
+            function rectAnchor(box, targetX, targetY) {
+                const halfW = box.w / 2;
+                const halfH = box.h / 2;
+                const dx = targetX - box.cx;
+                const dy = targetY - box.cy;
+                if (Math.abs(dx / halfW) > Math.abs(dy / halfH)) {
+                    return { x: box.cx + Math.sign(dx || 1) * halfW, y: box.cy + (dy / (Math.abs(dx) || 1)) * halfW };
+                }
+                return { x: box.cx + (dx / (Math.abs(dy) || 1)) * halfH, y: box.cy + Math.sign(dy || 1) * halfH };
+            }
+
+            parts.push(`<svg class="chen-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Entity Relationship Diagram">`);
+
+            const farmTopAnchors = {
+                crop_id: { x: boxes.farm_data.cx - 105, y: boxes.farm_data.cy - boxes.farm_data.h / 2 },
+                region_id: { x: boxes.farm_data.cx, y: boxes.farm_data.cy - boxes.farm_data.h / 2 },
+                soil_id: { x: boxes.farm_data.cx + 105, y: boxes.farm_data.cy - boxes.farm_data.h / 2 }
+            };
+
+            relationConfigs.forEach(rel => {
+                const from = entityBottom(boxes[rel.parent]);
+                const to = farmTopAnchors[rel.key];
+                const diamondW = 128;
+                const diamondH = 56;
+                const points = [
+                    `${rel.cx},${rel.cy - diamondH / 2}`,
+                    `${rel.cx + diamondW / 2},${rel.cy}`,
+                    `${rel.cx},${rel.cy + diamondH / 2}`,
+                    `${rel.cx - diamondW / 2},${rel.cy}`
+                ].join(" ");
+
+                parts.push(`<line class="chen-edge" x1="${from.x}" y1="${from.y}" x2="${rel.cx}" y2="${rel.cy - 30}" />`);
+                drawDoubleLine(rel.cx, rel.cy + 28, to.x, to.y);
+                parts.push(`<polygon class="chen-diamond" points="${points}" />`);
+                parts.push(`<text class="chen-diamond-label" x="${rel.cx}" y="${rel.cy + 6}" text-anchor="middle">${rel.label}</text>`);
+
+                const one = interpolate(from, { x: rel.cx, y: rel.cy - 30 }, 0.35);
+                const many = interpolate({ x: rel.cx, y: rel.cy + 28 }, to, 0.78);
+                const oneX = one.x + (rel.parent === "crop" ? -12 : rel.parent === "soil" ? 12 : 0);
+                const oneY = one.y - 8;
+                const manyX = many.x + rel.nOffsetX;
+                const manyY = many.y - 14;
+                parts.push(`<circle class="chen-card-bg" cx="${oneX}" cy="${oneY - 4}" r="12" />`);
+                parts.push(`<circle class="chen-card-bg" cx="${manyX}" cy="${manyY - 4}" r="12" />`);
+                parts.push(`<text class="chen-card-label" x="${oneX}" y="${oneY}" text-anchor="middle">1</text>`);
+                parts.push(`<text class="chen-card-label" x="${manyX}" y="${manyY}" text-anchor="middle">N</text>`);
+            });
+
+            function drawEntity(entity, key) {
+                const box = boxes[key];
+                const x = box.cx - box.w / 2;
+                const y = box.cy - box.h / 2;
+                parts.push(`<rect class="chen-entity" x="${x}" y="${y}" width="${box.w}" height="${box.h}" />`);
+                parts.push(`<text class="chen-entity-label" x="${box.cx}" y="${box.cy + 8}" text-anchor="middle">${escapeHtml(entity.name.toUpperCase())}</text>`);
+            }
+
+            drawEntity(crop, "crop");
+            drawEntity(region, "region");
+            drawEntity(soil, "soil");
+            drawEntity(farm, "farm_data");
+
+            function drawTopAttributes(entity, key) {
+                const box = boxes[key];
+                const attrs = entity.attributes || [];
+                const pkSet = new Set(entity.primary_keys || []);
+                const left = attrs[0];
+                const right = attrs[1];
+                const positions = [
+                    { attr: left, x: box.cx - 98, y: box.cy - 126 },
+                    { attr: right, x: box.cx + 98, y: box.cy - 126 }
+                ];
+
+                positions.forEach(item => {
+                    if (!item.attr) {
+                        return;
+                    }
+                    const label = `${item.attr.name}${pkSet.has(item.attr.name) ? " (PK)" : ""}`;
+                    parts.push(`<line class="chen-attr-edge" x1="${box.cx}" y1="${box.cy - box.h / 2}" x2="${item.x}" y2="${item.y + 22}" />`);
+                    parts.push(`<ellipse class="chen-attr ${pkSet.has(item.attr.name) ? "chen-attr-pk" : ""}" cx="${item.x}" cy="${item.y}" rx="80" ry="22" />`);
+                    parts.push(`<text class="chen-attr-label ${pkSet.has(item.attr.name) ? "chen-attr-label-pk" : ""}" x="${item.x}" y="${item.y + 5}" text-anchor="middle">${escapeHtml(label)}</text>`);
+                });
+            }
+
+            drawTopAttributes(crop, "crop");
+            drawTopAttributes(region, "region");
+            drawTopAttributes(soil, "soil");
+
+            const farmPkSet = new Set(farm.primary_keys || []);
+            const farmAttrMap = {};
+            (farm.attributes || []).forEach(attr => {
+                if (!fkSet.has(attr.name)) {
+                    farmAttrMap[attr.name] = attr;
+                }
+            });
+            const preferredOrder = [
+                "id",
+                "rainfall",
+                "temperature",
+                "fertilizer_used",
+                "irrigation_used",
+                "weather_condition",
+                "days_to_harvest",
+                "yield"
+            ];
+            const farmAttrs = preferredOrder.map(name => farmAttrMap[name]).filter(Boolean);
+            const farmAttrSlots = [
+                { x: 250, y: 520 },
+                { x: 940, y: 610 },
+                { x: 950, y: 700 },
+                { x: 855, y: 800 },
+                { x: 700, y: 860 },
+                { x: 510, y: 860 },
+                { x: 355, y: 800 },
+                { x: 250, y: 700 }
+            ];
+
+            farmAttrs.forEach((attr, index) => {
+                const slot = farmAttrSlots[index];
+                if (!slot) {
+                    return;
+                }
+                const label = `${attr.name}${farmPkSet.has(attr.name) ? " (PK)" : ""}`;
+                const rx = Math.max(70, Math.min(95, label.length * 4.4));
+                const anchor = rectAnchor(boxes.farm_data, slot.x, slot.y);
+                parts.push(`<line class="chen-attr-edge" x1="${anchor.x}" y1="${anchor.y}" x2="${slot.x}" y2="${slot.y}" />`);
+                parts.push(`<ellipse class="chen-attr ${farmPkSet.has(attr.name) ? "chen-attr-pk" : ""}" cx="${slot.x}" cy="${slot.y}" rx="${rx}" ry="22" />`);
+                parts.push(`<text class="chen-attr-label ${farmPkSet.has(attr.name) ? "chen-attr-label-pk" : ""}" x="${slot.x}" y="${slot.y + 5}" text-anchor="middle">${escapeHtml(label)}</text>`);
+            });
+
+            parts.push("</svg>");
+            targetElement.innerHTML = parts.join("");
+        }
+
+        function renderRelationsTable(relationships) {
+            const rows = (relationships || []).map(rel => `
+                <tr>
+                    <td>${escapeHtml(rel.from_table)}</td>
+                    <td>${escapeHtml(rel.from_column)}</td>
+                    <td>${escapeHtml(rel.to_table)}</td>
+                    <td>${escapeHtml(rel.to_column)}</td>
+                </tr>
+            `).join("");
+
+            return `
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>From Table</th><th>From Column</th><th>To Table</th><th>To Column</th></tr>
+                        </thead>
+                        <tbody>${rows || '<tr><td colspan="4">No relationships found.</td></tr>'}</tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        async function load() {
+            try {
+                const response = await fetch(apiEndpoint);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const payload = await response.json();
+
+                if (viewMode === "er") {
+                    const entities = payload.entities || [];
+                    const relationships = payload.relationships || [];
+                    titleText.textContent = "Entity-Relationship Model";
+                    metaText.textContent = `Entities: ${entities.length} | Relationships: ${relationships.length}`;
+
+                    const entityCards = entities.map(entity => `
+                        <article class="entity-card">
+                            <h4>${escapeHtml(entity.name)}</h4>
+                            <ul>
+                                ${(entity.attributes || []).map(attr => {
+                                    const isPk = (entity.primary_keys || []).includes(attr.name) ? " (PK)" : "";
+                                    return `<li><code>${escapeHtml(attr.name)}</code> : ${escapeHtml(attr.type)}${isPk}</li>`;
+                                }).join("")}
+                            </ul>
+                        </article>
+                    `).join("");
+
+                    contentArea.innerHTML = `
+                        <div class="entity-grid">${entityCards}</div>
+                        <div class="diagram-wrap">
+                            <h4>ER Diagram</h4>
+                            <div id="diagramTarget"></div>
+                        </div>
+                        ${renderRelationsTable(relationships)}
+                    `;
+
+                    renderChenDiagram(document.getElementById("diagramTarget"), payload);
+                    return;
+                }
+
+                const lines = payload.relation_schema || [];
+                const relationships = payload.relationships || [];
+                titleText.textContent = "Relational Schema Notation";
+                metaText.textContent = `Relations: ${lines.length} | Relationships: ${relationships.length}`;
+
+                contentArea.innerHTML = `
+                    <div class="schema-wrap">
+                        <h4>Schema</h4>
+                        <pre class="schema-block">${escapeHtml(lines.join("\n"))}</pre>
+                    </div>
+                    <div class="diagram-wrap">
+                        <h4>Relational Schema Diagram</h4>
+                        <div id="schemaDiagramTarget"></div>
+                    </div>
+                    ${renderRelationsTable(relationships)}
+                `;
+                await renderMermaidInto(
+                    document.getElementById("schemaDiagramTarget"),
+                    payload.mermaid || ""
+                );
+            } catch (error) {
+                titleText.textContent = "Could not load metadata";
+                metaText.textContent = "Please check database/server and retry.";
+                contentArea.innerHTML = `<p class="error">${escapeHtml(error.message)}</p>`;
+            }
+        }
+
+        load();
+    </script>
+</body>
+</html>
