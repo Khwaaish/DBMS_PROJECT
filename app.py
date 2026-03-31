@@ -46,6 +46,132 @@ def render_dashboard():
     )
 
 
+def get_schema_metadata():
+    if db is None or cursor is None:
+        return None, "Database not connected"
+
+    schema_name = db.database
+
+    columns_result, error = execute_query(
+        """
+        SELECT table_name, column_name, column_type, is_nullable, column_key
+        FROM information_schema.columns
+        WHERE table_schema = %s
+        ORDER BY table_name, ordinal_position;
+        """,
+        (schema_name,),
+    )
+    if error:
+        return None, error
+
+    fk_result, error = execute_query(
+        """
+        SELECT table_name, column_name, referenced_table_name, referenced_column_name
+        FROM information_schema.key_column_usage
+        WHERE table_schema = %s
+          AND referenced_table_name IS NOT NULL
+        ORDER BY table_name, column_name;
+        """,
+        (schema_name,),
+    )
+    if error:
+        return None, error
+
+    table_map = {}
+    for table_name, column_name, column_type, is_nullable, column_key in columns_result:
+        if table_name not in table_map:
+            table_map[table_name] = {
+                "name": table_name,
+                "attributes": [],
+                "primary_keys": [],
+                "foreign_keys": [],
+            }
+
+        table_map[table_name]["attributes"].append(
+            {
+                "name": column_name,
+                "type": column_type,
+                "nullable": is_nullable == "YES",
+            }
+        )
+        if column_key == "PRI":
+            table_map[table_name]["primary_keys"].append(column_name)
+
+    relationships = []
+    for table_name, column_name, ref_table, ref_column in fk_result:
+        if table_name in table_map:
+            table_map[table_name]["foreign_keys"].append(
+                {
+                    "column": column_name,
+                    "references_table": ref_table,
+                    "references_column": ref_column,
+                }
+            )
+
+        relationships.append(
+            {
+                "from_table": table_name,
+                "from_column": column_name,
+                "to_table": ref_table,
+                "to_column": ref_column,
+            }
+        )
+
+    entities = [table_map[key] for key in sorted(table_map.keys())]
+    return {
+        "database": schema_name,
+        "entities": entities,
+        "relationships": relationships,
+    }, None
+
+
+def build_mermaid_er(metadata):
+    def node_name(name):
+        return "".join(ch if ch.isalnum() else "_" for ch in name).upper()
+
+    lines = ["erDiagram"]
+
+    for entity in metadata["entities"]:
+        entity_node = node_name(entity["name"])
+        lines.append(f"    {entity_node} {{")
+        for attribute in entity["attributes"]:
+            raw_type = attribute["type"].split("(")[0].upper()
+            marker = " PK" if attribute["name"] in entity["primary_keys"] else ""
+            lines.append(f"        {raw_type} {attribute['name']}{marker}")
+        lines.append("    }")
+
+    for relation in metadata["relationships"]:
+        from_node = node_name(relation["from_table"])
+        to_node = node_name(relation["to_table"])
+        lines.append(f"    {to_node} ||--o{{ {from_node} : {relation['from_column']}")
+
+    return "\n".join(lines)
+
+
+def build_relation_schema_lines(metadata):
+    lines = []
+    for entity in metadata["entities"]:
+        fk_by_column = {
+            fk["column"]: f"{fk['references_table']}.{fk['references_column']}"
+            for fk in entity["foreign_keys"]
+        }
+
+        parts = []
+        for attribute in entity["attributes"]:
+            marks = []
+            if attribute["name"] in entity["primary_keys"]:
+                marks.append("PK")
+            if attribute["name"] in fk_by_column:
+                marks.append(f"FK->{fk_by_column[attribute['name']]}")
+
+            marks_suffix = f" [{', '.join(marks)}]" if marks else ""
+            parts.append(f"{attribute['name']} {attribute['type']}{marks_suffix}")
+
+        lines.append(f"{entity['name']}({', '.join(parts)})")
+
+    return lines
+
+
 # ------------------ HOME ------------------
 @app.route('/')
 def home():
@@ -191,6 +317,59 @@ def highest_yield():
     if error:
         return jsonify({"error": error}), 500
     return jsonify(result)
+
+
+@app.route('/api/er-model')
+def er_model_api():
+    metadata, error = get_schema_metadata()
+    if error:
+        return jsonify({"error": error}), 500
+
+    return jsonify(
+        {
+            "database": metadata["database"],
+            "entities": metadata["entities"],
+            "relationships": metadata["relationships"],
+            "mermaid": build_mermaid_er(metadata),
+        }
+    )
+
+
+@app.route('/api/relation-schema')
+def relation_schema_api():
+    metadata, error = get_schema_metadata()
+    if error:
+        return jsonify({"error": error}), 500
+
+    return jsonify(
+        {
+            "database": metadata["database"],
+            "entities": metadata["entities"],
+            "relation_schema": build_relation_schema_lines(metadata),
+            "relationships": metadata["relationships"],
+            "mermaid": build_mermaid_er(metadata),
+        }
+    )
+
+
+@app.route('/er-model')
+def er_model_page():
+    return render_template(
+        "schema_view.html",
+        page_title="ER Model",
+        api_endpoint="/api/er-model",
+        view_mode="er",
+    )
+
+
+@app.route('/relation-schema')
+def relation_schema_page():
+    return render_template(
+        "schema_view.html",
+        page_title="Relational Schema",
+        api_endpoint="/api/relation-schema",
+        view_mode="schema",
+    )
 
 
 # ------------------ DML ------------------
