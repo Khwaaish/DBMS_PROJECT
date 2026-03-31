@@ -21,12 +21,18 @@ except Exception as e:
     print(f"Database connection failed: {e}")
 
 
-def execute_query(query):
+def execute_query(query, params=None, fetch=True):
     try:
-        if cursor is None:
+        if db is None or cursor is None:
             return None, "Database not connected"
-        cursor.execute(query)
-        return cursor.fetchall(), None
+
+        cursor.execute(query, params or ())
+
+        if fetch:
+            return cursor.fetchall(), None
+
+        db.commit()
+        return cursor.rowcount, None
     except Exception as e:
         return None, str(e)
 
@@ -55,7 +61,7 @@ def dashboard():
 # ------------------ SELECT QUERIES ------------------
 @app.route('/top-region')
 def top_region():
-    cursor.execute("""
+    result, error = execute_query("""
     SELECT r.region_name, AVG(f.yield)
     FROM Farm_Data f
     JOIN Region r ON f.region_id = r.region_id
@@ -63,7 +69,9 @@ def top_region():
     ORDER BY AVG(f.yield) DESC
     LIMIT 1;
     """)
-    return jsonify(cursor.fetchall())
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify(result)
 
 
 @app.route('/top-crops')
@@ -83,49 +91,57 @@ def top_crops():
 
 @app.route('/avg-yield-region')
 def avg_yield_region():
-    cursor.execute("""
+    result, error = execute_query("""
     SELECT r.region_name, AVG(f.yield)
     FROM Farm_Data f
     JOIN Region r ON f.region_id = r.region_id
     GROUP BY r.region_name;
     """)
-    return jsonify(cursor.fetchall())
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify(result)
 
 
 @app.route('/rainy-crops')
 def rainy_crops():
-    cursor.execute("""
+    result, error = execute_query("""
     SELECT DISTINCT c.crop_name
     FROM Farm_Data f
     JOIN Crop c ON f.crop_id = c.crop_id
     WHERE f.weather_condition = 'Rainy';
     """)
-    return jsonify(cursor.fetchall())
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify(result)
 
 
 @app.route('/fertilizer-count')
 def fertilizer_count():
-    cursor.execute("""
+    result, error = execute_query("""
     SELECT COUNT(*)
     FROM Farm_Data
     WHERE fertilizer_used = 1;
     """)
-    return jsonify(cursor.fetchall())
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify(result)
 
 
 @app.route('/irrigation-count')
 def irrigation_count():
-    cursor.execute("""
+    result, error = execute_query("""
     SELECT COUNT(*)
     FROM Farm_Data
     WHERE irrigation_used = 1;
     """)
-    return jsonify(cursor.fetchall())
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify(result)
 
 
 @app.route('/best-soil')
 def best_soil():
-    cursor.execute("""
+    result, error = execute_query("""
     SELECT s.soil_type, AVG(f.yield)
     FROM Farm_Data f
     JOIN Soil s ON f.soil_id = s.soil_id
@@ -133,18 +149,22 @@ def best_soil():
     ORDER BY AVG(f.yield) DESC
     LIMIT 1;
     """)
-    return jsonify(cursor.fetchall())
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify(result)
 
 
 @app.route('/fast-harvest-crops')
 def fast_harvest():
-    cursor.execute("""
+    result, error = execute_query("""
     SELECT DISTINCT c.crop_name
     FROM Farm_Data f
     JOIN Crop c ON f.crop_id = c.crop_id
     WHERE f.days_to_harvest < 100;
     """)
-    return jsonify(cursor.fetchall())
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify(result)
 
 
 @app.route('/records-per-region')
@@ -177,7 +197,7 @@ def highest_yield():
 @app.route('/insert', methods=['POST'])
 def insert_data():
     data = request.json
-    cursor.execute("""
+    result, error = execute_query("""
     INSERT INTO Farm_Data
     (region_id, crop_id, soil_id, rainfall, temperature,
     fertilizer_used, irrigation_used, weather_condition,
@@ -189,43 +209,49 @@ def insert_data():
         data['fertilizer_used'], data['irrigation_used'],
         data['weather_condition'], data['days_to_harvest'],
         data['yield']
-    ))
-    db.commit()
-    return "Inserted Successfully"
+    ), fetch=False)
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify({"message": "Inserted Successfully", "rows_affected": result})
 
 
 @app.route('/update')
 def update_data():
-    cursor.execute("""
+    result, error = execute_query("""
     UPDATE Farm_Data
     SET yield = 4.0
     WHERE id = 1;
-    """)
-    db.commit()
-    return "Updated Successfully"
+    """, fetch=False)
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify({"message": "Updated Successfully", "rows_affected": result})
 
 
 @app.route('/delete')
 def delete_data():
-    cursor.execute("DELETE FROM Farm_Data WHERE id = 1;")
-    db.commit()
-    return "Deleted Successfully"
+    result, error = execute_query("DELETE FROM Farm_Data WHERE id = 1;", fetch=False)
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify({"message": "Deleted Successfully", "rows_affected": result})
 
 
 # ------------------ TCL ------------------
 @app.route('/transaction')
 def transaction():
     try:
-        cursor.execute("START TRANSACTION;")
+        if db is None or cursor is None:
+            return jsonify({"error": "Database not connected"}), 500
+
+        db.start_transaction()
         cursor.execute("""
         UPDATE Farm_Data
         SET yield = yield + 1
         WHERE region_id = 1;
         """)
-        cursor.execute("ROLLBACK;")
-        return "Transaction rolled back successfully"
-    except Exception:
-        return "Transaction failed"
+        db.rollback()
+        return jsonify({"message": "Transaction rolled back successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ------------------ DCL (run once manually) ------------------
