@@ -61,7 +61,23 @@ pip install flask mysql-connector-python pandas
 1. Ensure MySQL server is running.
 2. Ensure database `smart_farming` exists with tables:
 `region`, `crop`, `soil`, `farm_data` and proper PK/FK constraints.
-3. Update DB credentials in `app.py` and `load_mysql_data.py` if needed.
+3. Set DB credentials as environment variables (do not hardcode passwords in code).
+
+PowerShell (Windows):
+```powershell
+$env:DB_HOST="localhost"
+$env:DB_USER="root"
+$env:DB_PASSWORD="your_mysql_password"
+$env:DB_NAME="smart_farming"
+```
+
+Bash (Linux/macOS):
+```bash
+export DB_HOST="localhost"
+export DB_USER="root"
+export DB_PASSWORD="your_mysql_password"
+export DB_NAME="smart_farming"
+```
 
 ### 6.3 Load data
 ```bash
@@ -79,6 +95,5 @@ Open:
 1. Dashboard: `http://127.0.0.1:5000/dashboard`
 2. ER Model page: `http://127.0.0.1:5000/er-model`
 3. Relational Schema page: `http://127.0.0.1:5000/relation-schema`
-
 
 

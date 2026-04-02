@@ -1,19 +1,23 @@
+import os
+
 from flask import Flask, jsonify, request, render_template
 import mysql.connector
 
 app = Flask(__name__)
+
+DB_CONFIG = {
+    "host": os.getenv("DB_HOST", "localhost"),
+    "user": os.getenv("DB_USER", "root"),
+    "password": os.getenv("DB_PASSWORD", ""),
+    "database": os.getenv("DB_NAME", "smart_farming"),
+}
 
 # DB connection
 db = None
 cursor = None
 
 try:
-    db = mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="123Lakshnya@123",
-        database="smart_farming"
-    )
+    db = mysql.connector.connect(**DB_CONFIG)
     db.autocommit = True
     cursor = db.cursor()
     print("Database connected successfully!")

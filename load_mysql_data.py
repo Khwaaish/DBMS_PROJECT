@@ -1,13 +1,14 @@
 import csv
+import os
 
 import mysql.connector
 
 
 DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "123Lakshnya@123",
-    "database": "smart_farming",
+    "host": os.getenv("DB_HOST", "localhost"),
+    "user": os.getenv("DB_USER", "root"),
+    "password": os.getenv("DB_PASSWORD", ""),
+    "database": os.getenv("DB_NAME", "smart_farming"),
 }
 
 
